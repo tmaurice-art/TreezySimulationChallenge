@@ -16,20 +16,6 @@ execute:
 Use Cursor AI for speed, but ensure you understand and can explain the results in your own words.  Verify cursor's calculations as investment simulation is tricky.
 ::::
 
-:::: {.callout-tip}
-## 📝 How to Present Your Analysis
-
-Your analysis should read as a **persuasive narrative** arguing for or against the investment. Use data and calculations to support your argument, but present findings **inline in prose**—not as raw code output.
-
-- **Round figures** for readability (whole dollars for balances, 2-3 decimals for probabilities)
-- **Interpret results** in your own words outside of code chunks
-- Use Quarto inline code (e.g., `` `{{python}} round(ev, 0)` ``) or type values directly
-
-**Example:** Instead of printing `36000.0` from code, write:
-
-> *"After one flip, the expected account balance is $36,000—a 20% increase over the initial $30,000 buy-in. This positive expected value suggests the game is favorable; if you can place this bet infinite times, you will on average end up with $6,000 gain for each time you bet $30,000.  Note: this is an interpretation for a slighlty different game."*
-::::
-
 ## The Investment Game (Brief)
 
 You have the opportunity to buy-in to this game next week with $30,000. Your job is to analyze the potential outcomes of the game and communicate why you should or should not buy-in.  
@@ -102,10 +88,30 @@ Explain whether the expected value of your account balance after one flip is gre
 
 ```{python}
 #| label: q1-expected-value-py
+#| fig-cap: "After one flip: possible outcomes vs expected value"
 #| echo: false
 # After one flip: Heads -> W1 = 30000 * 1.5 = 45000, Tails -> W1 = 30000 * 0.6 = 18000
 ev_one_flip = 0.5 * (BUY_IN * 1.5) + 0.5 * (BUY_IN * 0.6)
 ev_gain_pct = 100 * (ev_one_flip - BUY_IN) / BUY_IN
+heads1 = BUY_IN * 1.5
+tails1 = BUY_IN * 0.6
+
+fig1, ax1 = plt.subplots(figsize=(7, 4))
+labels = ["Heads (+50%)", "Tails (−40%)"]
+vals = [heads1, tails1]
+colors = ["#2ca02c", "#d62728"]
+bars = ax1.bar(labels, vals, color=colors, edgecolor="white", linewidth=1.2)
+ax1.axhline(BUY_IN, color="gray", linestyle="--", alpha=0.9, label=f"Buy-in ${BUY_IN:,}")
+ax1.axhline(ev_one_flip, color="#1f77b4", linestyle="-", linewidth=2, label=f"Expected value ${ev_one_flip:,.0f}")
+ax1.set_ylabel("Account balance after one flip ($)")
+ax1.set_title("One flip: two outcomes and expected value")
+ax1.legend(loc="upper right")
+for b, v in zip(bars, vals):
+    ax1.text(b.get_x() + b.get_width() / 2, b.get_height() + 800, f"${v:,.0f}", ha="center", fontsize=10)
+ax1.set_ylim(0, max(max(vals), ev_one_flip) * 1.2)
+ax1.grid(True, alpha=0.3, axis="y")
+plt.tight_layout()
+plt.show()
 ```
 
 The expected value after one flip is **$`{python} f'{ev_one_flip:,.0f}'`**—a **`{python} round(ev_gain_pct, 1)`%** gain over the $30,000 buy-in. So the one-year expected value is *greater than* the initial investment: the 50% gain on heads and 40% loss on tails are not symmetric in dollar terms (you gain more on a win than you lose on a loss in absolute dollars). Based on this alone, the game has positive expected value per flip; if you could play this bet many times in isolation, the law of large numbers would favor buying in. That said, we play *once* and repeat for many years, so the *distribution* of outcomes (and the risk of ruin or deep drawdowns) matters as much as the single-flip expectation—which we explore next.
@@ -185,6 +191,7 @@ Report the probability that your final balance exceeds $30,000. Interpret what t
 
 ```{python}
 #| label: q4-prob-original-py
+#| fig-cap: "10,000 simulations: distribution of final balance at age 75 (original game)"
 #| echo: false
 # We already have prob_above_30k from the 100 simulations; for a sharper estimate use more runs.
 n_large = 10_000
@@ -195,7 +202,36 @@ for _ in range(n_large):
     for _ in range(N_YEARS):
         bal *= 1.5 if np.random.random() < 0.5 else 0.6
     finals_large.append(bal)
-prob_above_30k_large = np.mean(np.array(finals_large) > BUY_IN)
+finals_large = np.array(finals_large)
+prob_above_30k_large = np.mean(finals_large > BUY_IN)
+
+fig4, ax4 = plt.subplots(figsize=(8, 4))
+# Log scale on x often helps for very skewed wealth; cap display for readability
+ax4.hist(finals_large, bins=80, color="steelblue", edgecolor="white", alpha=0.85)
+ax4.axvline(BUY_IN, color="red", linestyle="--", linewidth=2, label=f"Buy-in ${BUY_IN:,}")
+ax4.set_xlabel("Final balance ($)")
+ax4.set_ylabel("Count")
+ax4.set_title(f"Final balance at age 75 — P(finish > buy-in) ≈ {prob_above_30k_large:.2%}")
+ax4.legend()
+ax4.grid(True, alpha=0.3, axis="y")
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: q4-prob-bars-py
+#| fig-cap: "Proportion of simulations finishing above vs at/below $30,000 buy-in"
+#| echo: false
+fig4b, ax4b = plt.subplots(figsize=(5, 4))
+below = 1 - prob_above_30k_large
+ax4b.bar(["Finish ≤ $30k", "Finish > $30k"], [below, prob_above_30k_large], color=["#d62728", "#2ca02c"], edgecolor="white")
+ax4b.set_ylabel("Proportion of simulations")
+ax4b.set_title("Share of paths above vs at/below buy-in")
+ax4b.set_ylim(0, 1)
+for i, p in enumerate([below, prob_above_30k_large]):
+    ax4b.text(i, p + 0.03, f"{p:.1%}", ha="center", fontsize=11)
+plt.tight_layout()
+plt.show()
 ```
 
 Using 10,000 simulations for a stable estimate, the probability that your final balance at age 75 exceeds $30,000 is about **`{python} round(prob_above_30k_large, 3)`** (i.e., roughly **`{python} round(100 * prob_above_30k_large, 1)`%** of paths finish above the buy-in). So in most runs you end with *less* than you put in, even though each individual flip has positive expected value. That changes the recommendation from Section 1: the one-flip EV is positive, but the *multi-period* game is highly risky—the multiplicative process and long horizon create a right-skewed distribution where the median and majority of outcomes are below $30,000. Unless you are comfortable with a high chance of losing money by 75, this probability supports a *cautious* or *no* buy-in from a risk perspective.
@@ -239,11 +275,52 @@ plt.tight_layout()
 plt.show()
 ```
 
+```{python}
+#| label: q5-comparison-bars-py
+#| fig-cap: "P(finish above buy-in): original game vs 25% at risk (100 sims each)"
+#| echo: false
+fig5b, ax5b = plt.subplots(figsize=(5, 4))
+ax5b.bar(["Original", "25% at risk"], [prob_above_30k, prob_25_above_30k], color=["steelblue", "darkorange"], edgecolor="white")
+ax5b.axhline(0.5, color="gray", linestyle=":", alpha=0.8)
+ax5b.set_ylabel("P(final balance > $30,000)")
+ax5b.set_title("Chance of finishing above buy-in (same 100 sims)")
+ax5b.set_ylim(0, 1)
+for i, p in enumerate([prob_above_30k, prob_25_above_30k]):
+    ax5b.text(i, p + 0.03, f"{p:.0%}", ha="center", fontsize=11)
+plt.tight_layout()
+plt.show()
+```
+
 In the modified strategy, only 25% of the balance is at risk each year (so a head multiplies that part by 1.5 and a tail by 0.6; the rest is unchanged). Across 100 runs, the **probability of finishing above $30,000** with the 25% strategy is **`{python} round(prob_25_above_30k, 2)`** (mean final **$`{python} round(mean_25, 0)`**, median **$`{python} round(median_25, 0)`**). The **original** game is riskier: wider swings and a lower P(> $30k). The 25% strategy has **less upside** (smaller max outcomes) but **less downside** and a **higher chance** of ending above the buy-in. For most people, the 25% strategy would be the more reasonable choice—similar positive expected growth per flip but with a more palatable distribution of outcomes. The original full-bet game is hard to recommend unless one can truly afford to lose a large fraction of the $30,000.
 
 ### 6) The Kelly Criterion
 
-The **Kelly Criterion** says how much of your bankroll to bet each time to maximize long-run growth, assuming you can reinvest and repeat. For a bet with probability \(p\) of winning, win factor \(b\) (you win \(b\) times your stake), and lose factor \(a\) (you lose \(a\) times your stake), the optimal fraction is \(f^* = \frac{p}{a} - \frac{1-p}{b}\) when that is positive. Here, each flip is 50/50 with a 50% gain on a win and 40% loss on a loss: in multiplicative form, you multiply by 1.5 or 0.6. The growth-optimal fraction of wealth to risk per flip is the \(f\) that maximizes \(E[\log(1 + f \cdot R)]\) where \(R\) is 0.5 or -0.4. Solving gives a Kelly fraction around 5–10% of wealth per flip (depending on exact parameterization), not 100%. So the **original game (betting 100% each year) is far above Kelly**—hence the high variance and high probability of finishing below the buy-in. The **25%-at-risk** strategy is still above typical Kelly recommendations but much closer to a sustainable risk level. The Kelly Criterion therefore **supports** favoring the modified strategy: it suggests betting a small fraction of wealth each period rather than the full balance, which aligns with our recommendation to prefer the 25% strategy or to avoid the game if only the full-bet version is available.
+```{python}
+#| label: q6-kelly-py
+#| fig-cap: "Log growth per flip vs fraction of wealth at risk (Kelly optimum far below 100%)"
+#| echo: false
+# Per flip: multiply by 1.5 (win) or 0.6 (loss). Equivalent to stake f of wealth:
+# W' = W * ((1-f) + f*1.5) = W*(1+0.5f) on win, W*((1-f)+0.6f) = W*(1-0.4f) on loss.
+# g(f) = E[log multiplier] = 0.5*log(1+0.5f) + 0.5*log(1-0.4f)
+fs = np.linspace(0.001, 0.99, 200)
+g = 0.5 * np.log(1 + 0.5 * fs) + 0.5 * np.log(1 - 0.4 * fs)
+f_star = fs[np.argmax(g)]
+
+fig6, ax6 = plt.subplots(figsize=(7, 4))
+ax6.plot(fs, g, color="navy", linewidth=2)
+ax6.axvline(f_star, color="green", linestyle="--", label=f"Max ~f ≈ {f_star:.2f}")
+ax6.axvline(1.0, color="crimson", linestyle="--", alpha=0.8, label="Original game (f = 1)")
+ax6.axvline(0.25, color="orange", linestyle=":", linewidth=2, label="Modified (f = 0.25)")
+ax6.set_xlabel("Fraction of wealth at risk per flip (f)")
+ax6.set_ylabel("Expected log growth per flip (E[log W′/W])")
+ax6.set_title("Kelly: small f grows log wealth fastest; f = 1 is far to the right of optimum")
+ax6.legend(fontsize=8, loc="best")
+ax6.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+The **Kelly Criterion** says how much of your bankroll to bet each time to maximize long-run growth, assuming you can reinvest and repeat. For a bet with probability \(p\) of winning, win factor \(b\) (you win \(b\) times your stake), and lose factor \(a\) (you lose \(a\) times your stake), the optimal fraction is \(f^* = \frac{p}{a} - \frac{1-p}{b}\) when that is positive. Here, each flip is 50/50 with a 50% gain on a win and 40% loss on a loss: in multiplicative form, you multiply by 1.5 or 0.6. The growth-optimal fraction of wealth to risk per flip is the \(f\) that maximizes \(E[\log(1 + f \cdot R)]\) where \(R\) is 0.5 or -0.4. Solving gives a Kelly fraction around **10–25%** of wealth per flip (the curve above peaks near **f ≈ 0.25** under this payoff structure), not 100%. So the **original game (betting 100% each year) is far above Kelly**—hence the high variance and high probability of finishing below the buy-in. The **25%-at-risk** strategy is in the ballpark of growth-optimal sizing. The Kelly Criterion therefore **supports** favoring the modified strategy: it suggests betting a modest fraction of wealth each period rather than the full balance, which aligns with our recommendation to prefer the 25% strategy or to avoid the game if only the full-bet version is available.
 
 
 ## Professional Presentation
